@@ -69,9 +69,21 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 
 let selectedRole = null;
+let adminMode = false;
 
 function selectRole(role) {
   selectedRole = role;
+
+  // Trainerin = direkter Zugang ohne Login
+  if (role === "trainer") {
+    adminMode = true;
+    document.getElementById("startScreen").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    loadAthletes();
+    return;
+  }
+
+  // andere Rollen → Login
   document.getElementById("startScreen").classList.add("hidden");
   document.getElementById("loginBox").classList.remove("hidden");
 }
@@ -79,7 +91,12 @@ function selectRole(role) {
 async function login() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
-  await auth.signInWithEmailAndPassword(email, password);
+
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (e) {
+    alert("Login fehlgeschlagen");
+  }
 }
 
 auth.onAuthStateChanged(async user => {
