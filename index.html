@@ -41,21 +41,33 @@ button { width:100%; padding:12px; margin:5px 0; border-radius:10px; border:none
 
 <!-- APP -->
 <div id="app" class="hidden">
-  <button onclick="loadTrainerDashboard()">📊 Dashboard</button>
-  <select id="clubFilter" onchange="loadAthletes()">
-    <option value="">Alle Vereine</option>
-    <option>Alba Berlin</option>
-    <option>BASS Berlin</option>
-    <option>Basketball Gemeinschaft Zehlendorf</option>
-    <option>BSC Berlin</option>
-    <option>City Basket Berlin</option>
-    <option>Einheit Pankow</option>
-    <option>Friedenauer TSC</option>
-    <option>TSC Spandau</option>
-    <option>TuS Lichterfelde</option>
-    <option>Weddinger Wiesel</option>
-  </select>
+
+  <!-- ATHLETIN ANLEGEN -->
+  <div class="card" id="createBox">
+    <h3>Athletin anlegen</h3>
+    <input id="name" placeholder="Name">
+    <input id="age" type="number" placeholder="Alter">
+
+    <select id="club">
+      <option>Alba Berlin</option>
+      <option>BASS Berlin</option>
+      <option>Basketball Gemeinschaft Zehlendorf</option>
+      <option>BSC Berlin</option>
+      <option>City Basket Berlin</option>
+      <option>Einheit Pankow</option>
+      <option>Friedenauer TSC</option>
+      <option>TSC Spandau</option>
+      <option>TuS Lichterfelde</option>
+      <option>Weddinger Wiesel</option>
+    </select>
+
+    <input id="training" placeholder="Training/Woche">
+    <button onclick="createAthlete()">Athletin erstellen</button>
+  </div>
+
   <div id="athletes"></div>
+
+</div>
 </div>
 
 <script>
@@ -113,6 +125,25 @@ auth.onAuthStateChanged(async user => {
   if (role === "coach") loadAthletes(club);
 });
 
+async function createAthlete() {
+  const accessCode = Math.random().toString(36).substring(2,8);
+
+  const docRef = await db.collection("athletes").add({
+    name: document.getElementById("name").value,
+    age: document.getElementById("age").value,
+    club: document.getElementById("club").value,
+    training: document.getElementById("training").value,
+    accessCode
+  });
+
+  const qrLink = window.location.href + "?athlete=" + docRef.id + "&code=" + accessCode;
+
+  alert("Athletin erstellt!
+Zugangscode: " + accessCode);
+
+  loadAthletes();
+}
+
 function getColor(avg) {
   if (avg <= 2.5) return "#22c55e";
   if (avg <= 3.5) return "#eab308";
@@ -160,8 +191,27 @@ async function loadAthletes(forceClub=null) {
 
     div.onclick = () => showHistory(doc.id, data.name);
 
+    const delBtn = document.createElement("button");
+    delBtn.innerText = "❌ Löschen";
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteAthlete(doc.id); };
+    div.appendChild(delBtn);
+
     container.appendChild(div);
+
+    const qrLink = window.location.href + "?athlete=" + doc.id + "&code=" + data.accessCode;
+    QRCode.toCanvas(document.getElementById(`qr-${doc.id}`), qrLink);
   }
+}
+
+async function deleteAthlete(id) {
+  if (!confirm("Athletin wirklich löschen?")) return;
+
+  await db.collection("athletes").doc(id).delete();
+
+  const entries = await db.collection("entries").where("athleteId","==",id).get();
+  entries.forEach(doc => doc.ref.delete());
+
+  loadAthletes();
 }
 
 async function showHistory(id, name) {
