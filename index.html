@@ -18,6 +18,7 @@ button { width:100%; padding:12px; margin:5px 0; border-radius:10px; border:none
 .counter { display:flex; justify-content:space-between; align-items:center; margin:10px 0; }
 .counter button { width:30%; }
 .counter span { font-size:22px; }
+input, select { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:1px solid #ccc; }
 </style>
 </head>
 
@@ -37,12 +38,14 @@ button { width:100%; padding:12px; margin:5px 0; border-radius:10px; border:none
 <!-- APP -->
 <div id="app" class="hidden">
 
+  <!-- ATHLETIN ERSTELLEN -->
   <div class="card" id="createBox">
     <h3>Athletin anlegen</h3>
     <input id="name" placeholder="Name">
     <input id="birthdate" type="date">
 
     <select id="club">
+      <option value="">Verein wählen</option>
       <option>Alba Berlin</option>
       <option>BASS Berlin</option>
       <option>Basketball Gemeinschaft Zehlendorf</option>
@@ -55,22 +58,24 @@ button { width:100%; padding:12px; margin:5px 0; border-radius:10px; border:none
       <option>Weddinger Wiesel</option>
     </select>
 
-    <input id="training" placeholder="Training/Woche">
+    <input id="training" type="number" placeholder="Training/Woche">
     <button onclick="createAthlete()">Athletin erstellen</button>
   </div>
 
-  <!-- QR Anzeige -->
+  <!-- QR -->
   <div id="qrBox" class="card hidden">
     <h3>Zugang Athletin</h3>
     <canvas id="qrCanvas"></canvas>
     <p id="codeText"></p>
   </div>
 
+  <!-- LISTE -->
   <div id="athletes"></div>
 </div>
 
 <script>
-// 🔥 HIER DEINE FIREBASE DATEN EINTRAGEN
+
+// 🔴 HIER DEINE FIREBASE DATEN EINTRAGEN
 const firebaseConfig = {
   apiKey: "DEIN_KEY",
   authDomain: "DEIN_DOMAIN",
@@ -96,34 +101,55 @@ function selectRole(role) {
   }
 }
 
-// ================= ATHLETIN ERSTELLEN =================
+// ================= CREATE =================
 async function createAthlete() {
+
+  const name = document.getElementById("name").value;
+  const birthdate = document.getElementById("birthdate").value;
+  const club = document.getElementById("club").value;
+  const training = document.getElementById("training").value;
+
+  // VALIDIERUNG
+  if (!name || !birthdate || !club || !training) {
+    alert("Bitte alle Felder ausfüllen!");
+    return;
+  }
+
   try {
     const accessCode = Math.random().toString(36).substring(2,8);
 
     const docRef = await db.collection("athletes").add({
-      name: document.getElementById("name").value,
-      birthdate: document.getElementById("birthdate").value,
-      club: document.getElementById("club").value,
-      training: document.getElementById("training").value,
+      name,
+      birthdate,
+      club,
+      training,
       accessCode
     });
 
-    const qrLink = window.location.href + "?athlete=" + docRef.id + "&code=" + accessCode;
+    const qrLink = window.location.href.split("?")[0] +
+      "?athlete=" + docRef.id + "&code=" + accessCode;
 
+    // QR anzeigen
     document.getElementById("qrBox").classList.remove("hidden");
-    document.getElementById("codeText").innerText = "Zugangscode: " + accessCode;
+    document.getElementById("codeText").innerText =
+      "Zugangscode: " + accessCode;
 
-    QRCode.toCanvas(document.getElementById("qrCanvas"), qrLink);
+    QRCode.toCanvas(
+      document.getElementById("qrCanvas"),
+      qrLink
+    );
+
+    alert("Athletin erfolgreich erstellt!");
 
     loadAthletes();
 
   } catch (e) {
+    console.error(e);
     alert("Fehler: " + e.message);
   }
 }
 
-// ================= LISTE =================
+// ================= LOAD =================
 async function loadAthletes() {
   const container = document.getElementById("athletes");
   container.innerHTML = "";
@@ -145,24 +171,28 @@ async function loadAthletes() {
 
     container.appendChild(div);
 
-    const qrLink = window.location.href + "?athlete=" + doc.id + "&code=" + data.accessCode;
+    const qrLink = window.location.href.split("?")[0] +
+      "?athlete=" + doc.id + "&code=" + data.accessCode;
+
     QRCode.toCanvas(document.getElementById(`qr-${doc.id}`), qrLink);
   });
 }
 
-// ================= LÖSCHEN =================
+// ================= DELETE =================
 async function deleteAthlete(id) {
   if (!confirm("Athletin wirklich löschen?")) return;
 
   await db.collection("athletes").doc(id).delete();
 
-  const entries = await db.collection("entries").where("athleteId","==",id).get();
+  const entries = await db.collection("entries")
+    .where("athleteId","==",id).get();
+
   entries.forEach(doc => doc.ref.delete());
 
   loadAthletes();
 }
 
-// ================= ATHLETIN VIEW =================
+// ================= ATHLET VIEW =================
 const params = new URLSearchParams(window.location.search);
 const athleteId = params.get("athlete");
 
@@ -219,6 +249,7 @@ async function submit(id) {
 
   alert("Gespeichert");
 }
+
 </script>
 
 </body>
