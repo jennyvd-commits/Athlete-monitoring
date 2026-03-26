@@ -5,20 +5,19 @@
 <title>Mädchenbasketball Monitoring</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <style>
 body { font-family: Arial; background:#f5f5f5; padding:20px; text-align:center; }
-.card { background:white; padding:15px; border-radius:15px; margin:15px auto; max-width:400px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
-button { width:100%; padding:12px; margin:5px 0; border-radius:10px; border:none; background:#2563eb; color:white; }
+.card { background:white; padding:15px; border-radius:15px; margin:15px auto; max-width:420px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
+button { width:100%; padding:12px; margin:6px 0; border-radius:10px; border:none; background:#2563eb; color:white; }
 .logo { max-height:150px; margin-bottom:10px; }
 .hidden { display:none; }
 .counter { display:flex; justify-content:space-between; align-items:center; margin:10px 0; }
 .counter button { width:30%; }
 .counter span { font-size:22px; }
-input, select { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:1px solid #ccc; }
+input, select { width:100%; padding:10px; margin:6px 0; border-radius:8px; border:1px solid #ccc; }
+.badge { display:inline-block; padding:4px 8px; border-radius:8px; font-size:12px; }
 </style>
 </head>
 
@@ -27,7 +26,6 @@ input, select { width:100%; padding:10px; margin:5px 0; border-radius:8px; borde
 <img src="logo.png" class="logo" />
 <h1>Mädchenbasketball Monitoring</h1>
 
-<!-- START -->
 <div id="startScreen" class="card">
   <h3>Ich bin...</h3>
   <button onclick="selectRole('trainer')">Lehrer-Trainerin</button>
@@ -35,14 +33,12 @@ input, select { width:100%; padding:10px; margin:5px 0; border-radius:8px; borde
   <button onclick="selectRole('athlete')">Athletin</button>
 </div>
 
-<!-- APP -->
 <div id="app" class="hidden">
 
-  <!-- ATHLETIN ERSTELLEN -->
   <div class="card" id="createBox">
     <h3>Athletin anlegen</h3>
     <input id="name" placeholder="Name">
-    <input id="birthdate" type="date">
+    <input id="birthdate" type="text" placeholder="Geburtsdatum (z.B. 12.05.2010)">
 
     <select id="club">
       <option value="">Verein wählen</option>
@@ -56,143 +52,121 @@ input, select { width:100%; padding:10px; margin:5px 0; border-radius:8px; borde
       <option>TSC Spandau</option>
       <option>TuS Lichterfelde</option>
       <option>Weddinger Wiesel</option>
+      <option>Sonstige</option>
     </select>
 
-    <input id="training" type="number" placeholder="Training/Woche">
+    <input id="training" type="text" placeholder="Trainings pro Woche (z.B. 3)">
     <button onclick="createAthlete()">Athletin erstellen</button>
   </div>
 
-  <!-- QR -->
   <div id="qrBox" class="card hidden">
     <h3>Zugang Athletin</h3>
     <canvas id="qrCanvas"></canvas>
     <p id="codeText"></p>
   </div>
 
-  <!-- LISTE -->
   <div id="athletes"></div>
 </div>
 
 <script>
+let athletes = JSON.parse(localStorage.getItem("athletes") || "[]");
+let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 
-// 🔴 HIER DEINE FIREBASE DATEN EINTRAGEN
-const firebaseConfig = {
-  apiKey: "DEIN_KEY",
-  authDomain: "DEIN_DOMAIN",
-  projectId: "DEIN_PROJECT"
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
-// ================= START =================
-function selectRole(role) {
-  document.getElementById("startScreen").classList.add("hidden");
-
-  if (role === "trainer") {
-    document.getElementById("app").classList.remove("hidden");
-    loadAthletes();
-  }
-
-  if (role === "coach") {
-    document.getElementById("app").classList.remove("hidden");
-    document.getElementById("createBox").style.display = "none";
-    loadAthletes();
-  }
+function saveData() {
+  localStorage.setItem("athletes", JSON.stringify(athletes));
+  localStorage.setItem("entries", JSON.stringify(entries));
 }
 
-// ================= CREATE =================
-async function createAthlete() {
+function selectRole(role) {
+  document.getElementById("startScreen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
 
+  if (role === "coach") {
+    document.getElementById("createBox").style.display = "none";
+  }
+
+  loadAthletes();
+}
+
+function createAthlete() {
   const name = document.getElementById("name").value;
   const birthdate = document.getElementById("birthdate").value;
   const club = document.getElementById("club").value;
   const training = document.getElementById("training").value;
 
-  // VALIDIERUNG
   if (!name || !birthdate || !club || !training) {
     alert("Bitte alle Felder ausfüllen!");
     return;
   }
 
-  try {
-    const accessCode = Math.random().toString(36).substring(2,8);
+  const id = Date.now().toString();
+  const accessCode = Math.random().toString(36).substring(2,8);
 
-    const docRef = await db.collection("athletes").add({
-      name,
-      birthdate,
-      club,
-      training,
-      accessCode
-    });
+  athletes.push({ id, name, birthdate, club, training, accessCode });
+  saveData();
 
-    const qrLink = window.location.href.split("?")[0] +
-      "?athlete=" + docRef.id + "&code=" + accessCode;
+  const qrLink = window.location.href.split("?")[0] + "?athlete=" + id + "&code=" + accessCode;
 
-    // QR anzeigen
-    document.getElementById("qrBox").classList.remove("hidden");
-    document.getElementById("codeText").innerText =
-      "Zugangscode: " + accessCode;
+  document.getElementById("qrBox").classList.remove("hidden");
+  document.getElementById("codeText").innerText = "Zugangscode: " + accessCode;
 
-    QRCode.toCanvas(
-      document.getElementById("qrCanvas"),
-      qrLink
-    );
+  QRCode.toCanvas(document.getElementById("qrCanvas"), qrLink);
 
-    alert("Athletin erfolgreich erstellt!");
-
-    loadAthletes();
-
-  } catch (e) {
-    console.error(e);
-    alert("Fehler: " + e.message);
-  }
+  loadAthletes();
 }
 
-// ================= LOAD =================
-async function loadAthletes() {
+function getColor(avg) {
+  if (avg <= 2.5) return "green";
+  if (avg <= 3.5) return "yellow";
+  if (avg <= 4.5) return "orange";
+  return "red";
+}
+
+function get3DayAvg(athleteId) {
+  const athleteEntries = entries.filter(e => e.athleteId === athleteId).slice(-3);
+  if (athleteEntries.length === 0) return null;
+
+  const sum = athleteEntries.reduce((a,b)=>a+b.avg,0);
+  return sum / athleteEntries.length;
+}
+
+function loadAthletes() {
   const container = document.getElementById("athletes");
   container.innerHTML = "";
 
-  const snapshot = await db.collection("athletes").get();
-
-  snapshot.forEach(doc => {
-    const data = doc.data();
+  athletes.forEach(a => {
+    const avg = get3DayAvg(a.id);
+    const color = avg ? getColor(avg) : "grey";
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <h3>${data.name}</h3>
-      <p>${data.club}</p>
-      <button onclick="event.stopPropagation(); deleteAthlete('${doc.id}')">❌ Löschen</button>
-      <canvas id="qr-${doc.id}"></canvas>
+      <h3>${a.name}</h3>
+      <p>${a.club} <span class="badge">${a.training}x/Woche</span></p>
+      <div class="badge" style="background:${color}">Status</div>
+      <button onclick="deleteAthlete('${a.id}')">❌ Löschen</button>
+      <canvas id="qr-${a.id}"></canvas>
     `;
 
     container.appendChild(div);
 
-    const qrLink = window.location.href.split("?")[0] +
-      "?athlete=" + doc.id + "&code=" + data.accessCode;
-
-    QRCode.toCanvas(document.getElementById(`qr-${doc.id}`), qrLink);
+    const qrLink = window.location.href.split("?")[0] + "?athlete=" + a.id + "&code=" + a.accessCode;
+    QRCode.toCanvas(document.getElementById(`qr-${a.id}`), qrLink);
   });
 }
 
-// ================= DELETE =================
-async function deleteAthlete(id) {
+function deleteAthlete(id) {
   if (!confirm("Athletin wirklich löschen?")) return;
 
-  await db.collection("athletes").doc(id).delete();
+  athletes = athletes.filter(a => a.id !== id);
+  entries = entries.filter(e => e.athleteId !== id);
 
-  const entries = await db.collection("entries")
-    .where("athleteId","==",id).get();
-
-  entries.forEach(doc => doc.ref.delete());
-
+  saveData();
   loadAthletes();
 }
 
-// ================= ATHLET VIEW =================
+// ===== ATHLET VIEW =====
 const params = new URLSearchParams(window.location.search);
 const athleteId = params.get("athlete");
 
@@ -218,7 +192,7 @@ if (athleteId) {
       <button onclick="change('load',1)">+</button>
     </div>
 
-    <button onclick="submit('${athleteId}')">Speichern</button>
+    <button onclick="saveEntry('${athleteId}')">Speichern</button>
   `;
 }
 
@@ -231,21 +205,40 @@ function change(field, delta) {
   el.innerText = val;
 }
 
-async function submit(id) {
+function saveEntry(id) {
   const sleep = parseInt(document.getElementById("sleep").innerText);
   const academic = parseInt(document.getElementById("academic").innerText);
   const load = parseInt(document.getElementById("load").innerText);
 
   const avg = (sleep + academic + load) / 3;
 
-  await db.collection("entries").add({
-    athleteId: id,
-    sleep,
-    academic,
-    load,
-    avg,
-    date: new Date()
-  });
+  const today = new Date().toISOString().split("T")[0];
+
+  const athleteEntries = entries.filter(e => e.athleteId === id);
+  const lastEntry = athleteEntries[athleteEntries.length - 1];
+
+  // AUTO-FILL fehlende Tage
+  if (lastEntry) {
+    let lastDate = new Date(lastEntry.date);
+    let current = new Date(lastDate);
+    current.setDate(current.getDate() + 1);
+
+    while (current.toISOString().split("T")[0] < today) {
+      entries.push({
+        athleteId: id,
+        sleep: lastEntry.sleep,
+        academic: lastEntry.academic,
+        load: lastEntry.load,
+        avg: lastEntry.avg,
+        date: current.toISOString().split("T")[0]
+      });
+      current.setDate(current.getDate() + 1);
+    }
+  }
+
+  entries.push({ athleteId: id, sleep, academic, load, avg, date: today });
+
+  saveData();
 
   alert("Gespeichert");
 }
