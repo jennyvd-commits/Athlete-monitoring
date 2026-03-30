@@ -9,7 +9,7 @@
 
 <style>
 body { font-family: Arial; background:#f5f5f5; padding:20px; text-align:center; }
-.card { background:white; padding:15px; border-radius:15px; margin:15px auto; max-width:420px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
+.card { padding:15px; border-radius:15px; margin:15px auto; max-width:420px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
 button { width:100%; padding:12px; margin:6px 0; border-radius:10px; border:none; background:#2563eb; color:white; }
 .logo { max-height:150px; margin-bottom:10px; }
 .hidden { display:none; }
@@ -18,6 +18,10 @@ button { width:100%; padding:12px; margin:6px 0; border-radius:10px; border:none
 .counter span { font-size:22px; }
 input, select { width:100%; padding:10px; margin:6px 0; border-radius:8px; border:1px solid #ccc; }
 .badge { display:inline-block; padding:4px 8px; border-radius:8px; font-size:12px; }
+.tabs { display:flex; gap:10px; margin-bottom:10px; }
+.tab { flex:1; padding:10px; border-radius:10px; background:#ddd; cursor:pointer; }
+.active { background:#2563eb; color:white; }
+canvas { max-width:100%; }
 </style>
 </head>
 
@@ -35,42 +39,68 @@ input, select { width:100%; padding:10px; margin:6px 0; border-radius:8px; borde
 
 <div id="app" class="hidden">
 
-  <div class="card" id="createBox">
-    <h3>Athletin anlegen</h3>
-    <input id="name" placeholder="Name">
-    <input id="birthdate" type="text" placeholder="Geburtsdatum (z.B. 12.05.2010)">
+<div class="tabs" id="tabs">
+  <div class="tab active" onclick="showTab('create')">Athletin anlegen</div>
+  <div class="tab" onclick="showTab('overview')">Übersicht Athletinnen</div>
+</div>
 
-    <select id="club">
-      <option value="">Verein wählen</option>
-      <option>Alba Berlin</option>
-      <option>BASS Berlin</option>
-      <option>Basketball Gemeinschaft Zehlendorf</option>
-      <option>BSC Berlin</option>
-      <option>City Basket Berlin</option>
-      <option>Einheit Pankow</option>
-      <option>Friedenauer TSC</option>
-      <option>TSC Spandau</option>
-      <option>TuS Lichterfelde</option>
-      <option>Weddinger Wiesel</option>
-      <option>Sonstige</option>
-    </select>
+<div class="card" id="createBox">
+  <h3>Athletin anlegen</h3>
+  <input id="name" placeholder="Name">
+  <input id="birthdate" type="text" placeholder="Geburtsdatum">
 
-    <input id="training" type="text" placeholder="Trainings pro Woche (z.B. 3)">
-    <button onclick="createAthlete()">Athletin erstellen</button>
-  </div>
+  <select id="club">
+    <option value="">Verein wählen</option>
+    <option>Alba Berlin</option>
+    <option>BASS Berlin</option>
+    <option>Basketball Gemeinschaft Zehlendorf</option>
+    <option>BSC Berlin</option>
+    <option>City Basket Berlin</option>
+    <option>Einheit Pankow</option>
+    <option>Friedenauer TSC</option>
+    <option>TSC Spandau</option>
+    <option>TuS Lichterfelde</option>
+    <option>Weddinger Wiesel</option>
+    <option>Sonstige</option>
+  </select>
 
-  <div id="qrBox" class="card hidden">
-    <h3>Zugang Athletin</h3>
-    <canvas id="qrCanvas"></canvas>
-    <p id="codeText"></p>
-  </div>
+  <input id="training" type="text" placeholder="Trainings pro Woche">
+  <button onclick="createAthlete()">Athletin erstellen</button>
+</div>
 
-  <div id="athletes"></div>
+<div id="qrBox" class="card hidden">
+  <canvas id="qrCanvas"></canvas>
+  <p id="codeText"></p>
+</div>
+
+<div id="overviewBox" class="hidden"></div>
+
+<div id="chartBox" class="card hidden">
+  <h3>Verlauf</h3>
+  <canvas id="chartCanvas" width="300" height="150"></canvas>
+  <button onclick="closeChart()">Schließen</button>
+</div>
+
 </div>
 
 <script>
 let athletes = JSON.parse(localStorage.getItem("athletes") || "[]");
 let entries = JSON.parse(localStorage.getItem("entries") || "[]");
+let sortMode = "name";
+
+const clubColors = {
+  "Alba Berlin": "#facc15",
+  "BASS Berlin": "#60a5fa",
+  "BSC Berlin": "#f87171",
+  "Basketball Gemeinschaft Zehlendorf": "#34d399",
+  "City Basket Berlin": "#a78bfa",
+  "Einheit Pankow": "#fb923c",
+  "Friedenauer TSC": "#f472b6",
+  "TSC Spandau": "#22d3ee",
+  "TuS Lichterfelde": "#4ade80",
+  "Weddinger Wiesel": "#fbbf24",
+  "Sonstige": "#9ca3af"
+};
 
 function saveData() {
   localStorage.setItem("athletes", JSON.stringify(athletes));
@@ -80,12 +110,21 @@ function saveData() {
 function selectRole(role) {
   document.getElementById("startScreen").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
+  showTab('create');
+}
 
-  if (role === "coach") {
-    document.getElementById("createBox").style.display = "none";
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+  if (tab === 'create') {
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    document.getElementById("createBox").classList.remove("hidden");
+    document.getElementById("overviewBox").classList.add("hidden");
+  } else {
+    document.querySelectorAll('.tab')[1].classList.add('active');
+    document.getElementById("createBox").classList.add("hidden");
+    showOverview();
   }
-
-  loadAthletes();
 }
 
 function createAthlete() {
@@ -95,7 +134,7 @@ function createAthlete() {
   const training = document.getElementById("training").value;
 
   if (!name || !birthdate || !club || !training) {
-    alert("Bitte alle Felder ausfüllen!");
+    alert("Bitte alles ausfüllen");
     return;
   }
 
@@ -108,11 +147,8 @@ function createAthlete() {
   const qrLink = window.location.href.split("?")[0] + "?athlete=" + id + "&code=" + accessCode;
 
   document.getElementById("qrBox").classList.remove("hidden");
-  document.getElementById("codeText").innerText = "Zugangscode: " + accessCode;
-
+  document.getElementById("codeText").innerText = "Code: " + accessCode;
   QRCode.toCanvas(document.getElementById("qrCanvas"), qrLink);
-
-  loadAthletes();
 }
 
 function getColor(avg) {
@@ -122,51 +158,89 @@ function getColor(avg) {
   return "red";
 }
 
-function get3DayAvg(athleteId) {
-  const athleteEntries = entries.filter(e => e.athleteId === athleteId).slice(-3);
-  if (athleteEntries.length === 0) return null;
-
-  const sum = athleteEntries.reduce((a,b)=>a+b.avg,0);
-  return sum / athleteEntries.length;
+function get3DayAvg(id) {
+  const list = entries.filter(e => e.athleteId === id).slice(-3);
+  if (!list.length) return null;
+  return list.reduce((a,b)=>a+b.avg,0)/list.length;
 }
 
-function loadAthletes() {
-  const container = document.getElementById("athletes");
-  container.innerHTML = "";
+function showOverview() {
+  const container = document.getElementById("overviewBox");
+  container.classList.remove("hidden");
 
-  athletes.forEach(a => {
+  let list = [...athletes];
+
+  if (sortMode === "name") list.sort((a,b)=>a.name.localeCompare(b.name));
+  else list.sort((a,b)=>a.club.localeCompare(b.club));
+
+  container.innerHTML = `
+    <button onclick="setSort('name')">Sortieren: Name</button>
+    <button onclick="setSort('club')">Sortieren: Verein</button>
+  `;
+
+  list.forEach(a => {
     const avg = get3DayAvg(a.id);
     const color = avg ? getColor(avg) : "grey";
+    const bg = clubColors[a.club] || "white";
 
     const div = document.createElement("div");
     div.className = "card";
+    div.style.background = bg;
 
     div.innerHTML = `
       <h3>${a.name}</h3>
-      <p>${a.club} <span class="badge">${a.training}x/Woche</span></p>
+      <p>${a.club}</p>
       <div class="badge" style="background:${color}">Status</div>
+      <button onclick="showHistory('${a.id}')">Verlauf anzeigen</button>
       <button onclick="deleteAthlete('${a.id}')">❌ Löschen</button>
-      <canvas id="qr-${a.id}"></canvas>
     `;
 
     container.appendChild(div);
-
-    const qrLink = window.location.href.split("?")[0] + "?athlete=" + a.id + "&code=" + a.accessCode;
-    QRCode.toCanvas(document.getElementById(`qr-${a.id}`), qrLink);
   });
 }
 
-function deleteAthlete(id) {
-  if (!confirm("Athletin wirklich löschen?")) return;
-
-  athletes = athletes.filter(a => a.id !== id);
-  entries = entries.filter(e => e.athleteId !== id);
-
-  saveData();
-  loadAthletes();
+function setSort(mode) {
+  sortMode = mode;
+  showOverview();
 }
 
-// ===== ATHLET VIEW =====
+function showHistory(id) {
+  const data = entries.filter(e => e.athleteId === id);
+  const canvas = document.getElementById("chartCanvas");
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if (!data.length) return alert("Keine Daten vorhanden");
+
+  const values = data.map(e=>e.avg);
+  const max = 6;
+
+  const stepX = canvas.width / (values.length - 1 || 1);
+
+  ctx.beginPath();
+  values.forEach((v,i)=>{
+    const x = i * stepX;
+    const y = canvas.height - (v/max)*canvas.height;
+    if (i===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  document.getElementById("chartBox").classList.remove("hidden");
+}
+
+function closeChart(){
+  document.getElementById("chartBox").classList.add("hidden");
+}
+
+function deleteAthlete(id) {
+  athletes = athletes.filter(a => a.id !== id);
+  entries = entries.filter(e => e.athleteId !== id);
+  saveData();
+  showOverview();
+}
+
 const params = new URLSearchParams(window.location.search);
 const athleteId = params.get("athlete");
 
@@ -174,18 +248,21 @@ if (athleteId) {
   document.body.innerHTML = `
     <h2>Daily Check</h2>
 
+    <p>Schlafqualität</p>
     <div class="counter">
       <button onclick="change('sleep',-1)">-</button>
       <span id="sleep">3</span>
       <button onclick="change('sleep',1)">+</button>
     </div>
 
+    <p>Schulbelastung</p>
     <div class="counter">
       <button onclick="change('academic',-1)">-</button>
       <span id="academic">3</span>
       <button onclick="change('academic',1)">+</button>
     </div>
 
+    <p>Belastung Vortag</p>
     <div class="counter">
       <button onclick="change('load',-1)">-</button>
       <span id="load">3</span>
@@ -199,9 +276,7 @@ if (athleteId) {
 function change(field, delta) {
   const el = document.getElementById(field);
   let val = parseInt(el.innerText);
-  val += delta;
-  if (val < 1) val = 1;
-  if (val > 6) val = 6;
+  val = Math.min(6, Math.max(1, val + delta));
   el.innerText = val;
 }
 
@@ -211,35 +286,22 @@ function saveEntry(id) {
   const load = parseInt(document.getElementById("load").innerText);
 
   const avg = (sleep + academic + load) / 3;
-
   const today = new Date().toISOString().split("T")[0];
 
-  const athleteEntries = entries.filter(e => e.athleteId === id);
-  const lastEntry = athleteEntries[athleteEntries.length - 1];
+  const last = entries.filter(e => e.athleteId === id).slice(-1)[0];
 
-  // AUTO-FILL fehlende Tage
-  if (lastEntry) {
-    let lastDate = new Date(lastEntry.date);
-    let current = new Date(lastDate);
-    current.setDate(current.getDate() + 1);
+  if (last) {
+    let d = new Date(last.date);
+    d.setDate(d.getDate()+1);
 
-    while (current.toISOString().split("T")[0] < today) {
-      entries.push({
-        athleteId: id,
-        sleep: lastEntry.sleep,
-        academic: lastEntry.academic,
-        load: lastEntry.load,
-        avg: lastEntry.avg,
-        date: current.toISOString().split("T")[0]
-      });
-      current.setDate(current.getDate() + 1);
+    while (d.toISOString().split("T")[0] < today) {
+      entries.push({ ...last, date: d.toISOString().split("T")[0] });
+      d.setDate(d.getDate()+1);
     }
   }
 
-  entries.push({ athleteId: id, sleep, academic, load, avg, date: today });
-
+  entries.push({ athleteId:id, sleep, academic, load, avg, date:today });
   saveData();
-
   alert("Gespeichert");
 }
 
