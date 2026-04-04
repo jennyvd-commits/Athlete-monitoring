@@ -48,6 +48,7 @@ canvas { max-width:100%; }
   <h3>Athletin anlegen</h3>
   <input id="name" placeholder="Name">
   <input id="birthdate" type="text" placeholder="Geburtsdatum">
+  <input id="schoolYear" type="text" placeholder="Seit wann auf der Schule (z.B. 2022/23)">
 
   <select id="club">
     <option value="">Verein wählen</option>
@@ -65,7 +66,6 @@ canvas { max-width:100%; }
   </select>
 
   <input id="training" type="text" placeholder="Trainings pro Woche">
-  <input id="schoolYear" type="text" placeholder="Seit wann auf der Schule (z.B. 2022/23)">
   <button onclick="createAthlete()">Athletin erstellen</button>
 </div>
 
@@ -88,20 +88,9 @@ canvas { max-width:100%; }
 let athletes = JSON.parse(localStorage.getItem("athletes") || "[]");
 let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 let sortMode = "name";
+let filterYear = "all";
 
-const clubColors = {
-  "Alba Berlin": "#facc15",
-  "BASS Berlin": "#60a5fa",
-  "BSC Berlin": "#f87171",
-  "Basketball Gemeinschaft Zehlendorf": "#34d399",
-  "City Basket Berlin": "#a78bfa",
-  "Einheit Pankow": "#fb923c",
-  "Friedenauer TSC": "#f472b6",
-  "TSC Spandau": "#22d3ee",
-  "TuS Lichterfelde": "#4ade80",
-  "Weddinger Wiesel": "#fbbf24",
-  "Sonstige": "#9ca3af"
-};
+const clubColors = {"Sonstige":"#9ca3af"};
 
 function saveData() {
   localStorage.setItem("athletes", JSON.stringify(athletes));
@@ -146,7 +135,7 @@ function createAthlete() {
   athletes.push({ id, name, birthdate, club, training, schoolYear, accessCode });
   saveData();
 
-  const qrLink = window.location.href.split("?")[0] + "?athlete=" + id + "&code=" + accessCode;
+  const qrLink = window.location.href.split("?")[0] + "?athlete=" + id;
 
   document.getElementById("qrBox").classList.remove("hidden");
   document.getElementById("codeText").innerText = "Code: " + accessCode;
@@ -172,77 +161,64 @@ function showOverview() {
 
   let list = [...athletes];
 
+  if (filterYear !== "all") {
+    list = list.filter(a => a.schoolYear === filterYear);
+  }
+
   if (sortMode === "name") list.sort((a,b)=>a.name.localeCompare(b.name));
   else list.sort((a,b)=>a.club.localeCompare(b.club));
 
   container.innerHTML = `
-    <button onclick="setSort('name')">Sortieren: Name</button>
-    <button onclick="setSort('club')">Sortieren: Verein</button>
+    <button onclick="setSort('name')">Sortieren Name</button>
+    <button onclick="setSort('club')">Sortieren Verein</button>
+    <input placeholder="Filter Schuljahr" oninput="setFilter(this.value)">
   `;
 
   list.forEach(a => {
     const avg = get3DayAvg(a.id);
     const color = avg ? getColor(avg) : "grey";
-    const bg = clubColors[a.club] || "white";
 
     const div = document.createElement("div");
     div.className = "card";
-    div.style.background = bg;
 
     div.innerHTML = `
       <h3>${a.name}</h3>
       <p>${a.club}</p>
-      <p>Schule seit: ${a.schoolYear || '-'} </p>
+      <p>Seit: ${a.schoolYear}</p>
       <div class="badge" style="background:${color}">Status</div>
       <button onclick="showHistory('${a.id}')">Verlauf anzeigen</button>
-      <button onclick="deleteAthlete('${a.id}')">❌ Löschen</button>
     `;
 
     container.appendChild(div);
   });
 }
 
-function setSort(mode) {
-  sortMode = mode;
-  showOverview();
-}
+function setSort(mode){ sortMode = mode; showOverview(); }
+function setFilter(val){ filterYear = val || "all"; showOverview(); }
 
 function showHistory(id) {
   const data = entries.filter(e => e.athleteId === id);
+  if (!data.length) return alert("Noch keine Daten vorhanden");
+
   const canvas = document.getElementById("chartCanvas");
   const ctx = canvas.getContext("2d");
-
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  if (!data.length) return alert("Keine Daten vorhanden");
-
   const values = data.map(e=>e.avg);
-  const max = 6;
-
-  const stepX = canvas.width / (values.length - 1 || 1);
+  const stepX = canvas.width/(values.length-1 || 1);
 
   ctx.beginPath();
   values.forEach((v,i)=>{
-    const x = i * stepX;
-    const y = canvas.height - (v/max)*canvas.height;
-    if (i===0) ctx.moveTo(x,y);
-    else ctx.lineTo(x,y);
+    const x=i*stepX;
+    const y=canvas.height-(v/6)*canvas.height;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   });
   ctx.stroke();
 
   document.getElementById("chartBox").classList.remove("hidden");
 }
 
-function closeChart(){
-  document.getElementById("chartBox").classList.add("hidden");
-}
-
-function deleteAthlete(id) {
-  athletes = athletes.filter(a => a.id !== id);
-  entries = entries.filter(e => e.athleteId !== id);
-  saveData();
-  showOverview();
-}
+function closeChart(){ document.getElementById("chartBox").classList.add("hidden"); }
 
 const params = new URLSearchParams(window.location.search);
 const athleteId = params.get("athlete");
@@ -250,60 +226,50 @@ const athleteId = params.get("athlete");
 if (athleteId) {
   document.body.innerHTML = `
     <h2>Daily Check</h2>
+    <p>Bewerte alle Kategorien von 1–6 (Schulnoten)</p>
 
     <p>Schlafqualität</p>
-    <div class="counter">
-      <button onclick="change('sleep',-1)">-</button>
-      <span id="sleep">3</span>
-      <button onclick="change('sleep',1)">+</button>
-    </div>
+    <div class="counter"><button onclick="change('sleep',-1)">-</button><span id="sleep">0</span><button onclick="change('sleep',1)">+</button></div>
 
     <p>Schulbelastung</p>
-    <div class="counter">
-      <button onclick="change('academic',-1)">-</button>
-      <span id="academic">3</span>
-      <button onclick="change('academic',1)">+</button>
-    </div>
+    <div class="counter"><button onclick="change('academic',-1)">-</button><span id="academic">0</span><button onclick="change('academic',1)">+</button></div>
 
     <p>Belastung Vortag</p>
-    <div class="counter">
-      <button onclick="change('load',-1)">-</button>
-      <span id="load">3</span>
-      <button onclick="change('load',1)">+</button>
-    </div>
+    <div class="counter"><button onclick="change('load',-1)">-</button><span id="load">0</span><button onclick="change('load',1)">+</button></div>
 
     <button onclick="saveEntry('${athleteId}')">Speichern</button>
   `;
 }
 
 function change(field, delta) {
-  const el = document.getElementById(field);
-  let val = parseInt(el.innerText);
-  val = Math.min(6, Math.max(1, val + delta));
-  el.innerText = val;
+  const el=document.getElementById(field);
+  let val=parseInt(el.innerText)||0;
+  val=Math.min(6,Math.max(0,val+delta));
+  el.innerText=val;
 }
 
-function saveEntry(id) {
-  const sleep = parseInt(document.getElementById("sleep").innerText);
-  const academic = parseInt(document.getElementById("academic").innerText);
-  const load = parseInt(document.getElementById("load").innerText);
+function saveEntry(id){
+  const sleep=parseInt(document.getElementById("sleep").innerText);
+  const academic=parseInt(document.getElementById("academic").innerText);
+  const load=parseInt(document.getElementById("load").innerText);
 
-  const avg = (sleep + academic + load) / 3;
-  const today = new Date().toISOString().split("T")[0];
+  if(sleep===0||academic===0||load===0){alert("Bitte alles bewerten");return;}
 
-  const last = entries.filter(e => e.athleteId === id).slice(-1)[0];
+  const avg=(sleep+academic+load)/3;
+  const today=new Date().toISOString().split("T")[0];
 
-  if (last) {
-    let d = new Date(last.date);
+  const last=entries.filter(e=>e.athleteId===id).slice(-1)[0];
+
+  if(last){
+    let d=new Date(last.date);
     d.setDate(d.getDate()+1);
-
-    while (d.toISOString().split("T")[0] < today) {
-      entries.push({ ...last, date: d.toISOString().split("T")[0] });
+    while(d.toISOString().split("T")[0]<today){
+      entries.push({...last,date:d.toISOString().split("T")[0]});
       d.setDate(d.getDate()+1);
     }
   }
 
-  entries.push({ athleteId:id, sleep, academic, load, avg, date:today });
+  entries.push({athleteId:id,sleep,academic,load,avg,date:today});
   saveData();
   alert("Gespeichert");
 }
